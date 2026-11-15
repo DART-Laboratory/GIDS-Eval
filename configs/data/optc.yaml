@@ -1,0 +1,10 @@
+schema_version: 1
+dataset_id: optc
+family: optc
+display_name: OpTC
+stage_root: ${stage_root}
+artifacts:
+  - name: optc_dir
+    kind: directory
+    source: ${raw_data_root}/OpTC
+    target: raw_data/OpTC

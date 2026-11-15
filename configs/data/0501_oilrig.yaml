@@ -1,0 +1,10 @@
+schema_version: 1
+dataset_id: 0501-oilrig
+family: "0501"
+display_name: 0501 OilRig
+stage_root: ${stage_root}
+artifacts:
+  - name: oilrig_log
+    kind: file
+    source: ${raw_data_root}/0501/label_oilrig.log
+    target: raw_data/0501/label_oilrig.log

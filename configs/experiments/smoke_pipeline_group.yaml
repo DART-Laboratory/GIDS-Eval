@@ -1,0 +1,103 @@
+schema_version: 2
+kind: experiment
+name: Modular smoke pipeline with command group
+experiment_id: smoke_group
+run_label: v1
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/lanl.yaml
+modules:
+  graph_construction:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - graph_construction
+      - --output-dir
+      - ${module_output_dir}
+      - --staged-manifests
+      - ${staged_manifests_path}
+      - --delta
+      - "1.0"
+      - --tag
+      - graph_v1
+    artifacts:
+      payload: payload.json
+  featurization:
+    runner: noop
+    inputs:
+      payload.json: ${graph_construction_artifact_payload}
+    artifacts:
+      payload: payload.json
+  graph_encoder:
+    runner: noop
+    inputs:
+      payload.json: ${featurization_artifact_payload}
+    artifacts:
+      payload: payload.json
+  temporal_encoder:
+    runner: noop
+    inputs:
+      payload.json: ${graph_encoder_artifact_payload}
+    artifacts:
+      payload: payload.json
+  loss:
+    runner: noop
+    inputs:
+      payload.json: ${temporal_encoder_artifact_payload}
+    artifacts:
+      payload: payload.json
+  detection:
+    runner: command_group
+    inputs:
+      payload.json: ${loss_artifact_payload}
+    artifacts:
+      payload: payload.json
+      results: results
+    jobs:
+      - id: detect_a
+        dataset: lanl
+        workdir: ${repo_root}
+        command:
+          - ${python_bin}
+          - -m
+          - gids_eval.module_tasks
+          - smoke-stage
+          - --stage
+          - detection_a
+          - --output-dir
+          - ${module_output_dir}/results/a
+          - --input-payload
+          - ${module_output_dir}/payload.json
+          - --delta
+          - "6.0"
+          - --tag
+          - detect_a
+          - --write-metrics
+        metrics_relpath: results/a/metrics.csv
+      - id: detect_b
+        dataset: lanl
+        workdir: ${repo_root}
+        command:
+          - ${python_bin}
+          - -m
+          - gids_eval.module_tasks
+          - smoke-stage
+          - --stage
+          - detection_b
+          - --output-dir
+          - ${module_output_dir}/results/b
+          - --input-payload
+          - ${module_output_dir}/payload.json
+          - --delta
+          - "7.5"
+          - --tag
+          - detect_b
+          - --write-metrics
+        metrics_relpath: results/b/metrics.csv

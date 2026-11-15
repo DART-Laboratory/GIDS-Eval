@@ -1,0 +1,10 @@
+schema_version: 1
+dataset_id: 0501-sandworm
+family: "0501"
+display_name: 0501 Sandworm
+stage_root: ${stage_root}
+artifacts:
+  - name: sandworm_log
+    kind: file
+    source: ${raw_data_root}/0501/label_sandworm.log
+    target: raw_data/0501/label_sandworm.log

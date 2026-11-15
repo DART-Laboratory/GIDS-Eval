@@ -1,0 +1,10 @@
+schema_version: 1
+dataset_id: lanl
+family: lanl
+display_name: LANL
+stage_root: ${stage_root}
+artifacts:
+  - name: lanl_dir
+    kind: directory
+    source: ${raw_data_root}/LANL
+    target: raw_data/LANL

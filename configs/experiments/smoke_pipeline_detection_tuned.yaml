@@ -1,0 +1,134 @@
+schema_version: 2
+kind: experiment
+name: Modular smoke pipeline detection tuned
+experiment_id: smoke_modular
+run_label: smoke_v2
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/lanl.yaml
+modules:
+  graph_construction:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - graph_construction
+      - --output-dir
+      - ${module_output_dir}
+      - --staged-manifests
+      - ${staged_manifests_path}
+      - --delta
+      - "1.0"
+      - --tag
+      - graph_v1
+    artifacts:
+      payload: payload.json
+  featurization:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - featurization
+      - --output-dir
+      - ${module_output_dir}
+      - --input-payload
+      - ${graph_construction_artifact_payload}
+      - --delta
+      - "2.0"
+      - --tag
+      - features_v1
+    artifacts:
+      payload: payload.json
+  graph_encoder:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - graph_encoder
+      - --output-dir
+      - ${module_output_dir}
+      - --input-payload
+      - ${featurization_artifact_payload}
+      - --delta
+      - "3.0"
+      - --tag
+      - gnn_v1
+    artifacts:
+      payload: payload.json
+  temporal_encoder:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - temporal_encoder
+      - --output-dir
+      - ${module_output_dir}
+      - --input-payload
+      - ${graph_encoder_artifact_payload}
+      - --delta
+      - "4.0"
+      - --tag
+      - temporal_v1
+    artifacts:
+      payload: payload.json
+  loss:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - loss
+      - --output-dir
+      - ${module_output_dir}
+      - --input-payload
+      - ${temporal_encoder_artifact_payload}
+      - --delta
+      - "5.0"
+      - --tag
+      - loss_v1
+    artifacts:
+      payload: payload.json
+  detection:
+    runner: shell_command
+    workdir: ${repo_root}
+    command:
+      - ${python_bin}
+      - -m
+      - gids_eval.module_tasks
+      - smoke-stage
+      - --stage
+      - detection
+      - --output-dir
+      - ${module_output_dir}
+      - --input-payload
+      - ${loss_artifact_payload}
+      - --delta
+      - "9.5"
+      - --tag
+      - detect_v2
+      - --write-metrics
+    artifacts:
+      payload: payload.json
+      metrics: metrics.csv
+    metrics_relpath: metrics.csv

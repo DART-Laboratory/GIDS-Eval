@@ -1,0 +1,445 @@
+import torch
+from torch import nn
+from torch.autograd import Variable
+from torch.nn import functional as F
+from torch_geometric.nn import GCNConv
+from torch_geometric.nn.conv.message_passing import MessagePassing
+from torch_geometric.utils import to_dense_adj, add_remaining_self_loops as add_sl
+
+from models.egcn_h import EGCN as EGCN_H, GRCU as GRCU_H
+from models.egcn_o import EGCN as EGCN_O, GRCU as GRCU_O
+
+class VGAE_Prior(nn.Module):
+    def __init__(self, x_dim, hidden_dim, embed_dim):
+        super(VGAE_Prior, self).__init__()
+
+        self.c1 = GCNConv(x_dim, hidden_dim, add_self_loops=True)
+        self.relu = nn.ReLU()
+        self.drop = nn.Dropout(0.25)
+
+        self.mean = GCNConv(hidden_dim, embed_dim, add_self_loops=True)
+        self.std = GCNConv(hidden_dim, embed_dim, add_self_loops=True)
+
+        self.soft = nn.Softplus()
+
+    def forward(self, x, ei, pm, ps, ew=None):
+        x = self.c1(x, ei, edge_weight=ew)
+        x = self.relu(x)
+        x = self.drop(x)
+
+        mean = self.mean(x, ei)
+        if self.eval:
+            return mean, torch.zeros((1))
+
+        std = self.soft(self.std(x, ei))
+
+        z = self._reparam(mean, std)
+        kld = self._kld_gauss(mean, std, pm, ps)
+
+        return z, kld
+
+    def _kld_gauss(self, mean_1, std_1, mean_2, std_2):
+
+        num_nodes = mean_1.size()[0]
+        kld_element =  (2 * torch.log(std_2 + self.eps) - 2 * torch.log(std_1 + self.eps) +
+                        (torch.pow(std_1 + self.eps ,2) + torch.pow(mean_1 - mean_2, 2)) /
+                        torch.pow(std_2 + self.eps ,2) - 1)
+        return (0.5 / num_nodes) * torch.mean(torch.sum(kld_element, dim=1), dim=0)
+
+    def _reparam(self, mean, std):
+        eps1 = torch.FloatTensor(std.size()).normal_()
+        eps1 = Variable(eps1)
+        return eps1.mul(std).add_(mean)
+
+class GraphGRU(nn.Module):
+    def __init__(self, in_size, hidden_size, n_layers=1, asl=True):
+        super(GraphGRU, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+
+        self.weight_xz = []
+        self.weight_hz = []
+
+        self.weight_xr = []
+        self.weight_hr = []
+
+        self.weight_xh = []
+        self.weight_hh = []
+
+        for i in range(self.n_layers):
+            if i==0:
+                self.weight_xz.append(GCNConv(in_size, hidden_size, add_self_loops=asl))
+                self.weight_hz.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_xr.append(GCNConv(in_size, hidden_size, add_self_loops=asl))
+                self.weight_hr.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_xh.append(GCNConv(in_size, hidden_size, add_self_loops=asl))
+                self.weight_hh.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+            else:
+                self.weight_xz.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_hz.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_xr.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_hr.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_xh.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+                self.weight_hh.append(GCNConv(hidden_size, hidden_size, add_self_loops=asl))
+
+        self.sig = nn.Sigmoid()
+        self.tanh = nn.Tanh()
+        self.drop = nn.Dropout(0.25)
+
+    def forward_once(self, x, ei, h):
+        h_out = None
+
+        for i in range(self.n_layers):
+            if i == 0:
+                z_g = self.sig(self.weight_xz[i](x, ei) + self.weight_hz[i](h, ei))
+                r_g = self.sig(self.weight_xr[i](x, ei) + self.weight_hr[i](h, ei))
+                h_hat = self.tanh(self.weight_xh[i](x, ei) + self.weight_hh[i](r_g * h, ei))
+                h_out = z_g * h[i] + (1-z_g) * h_hat
+
+            else:
+                z_g = self.sig(self.weight_xz[i](h_out, ei) + self.weight_hz[i](h, ei))
+                r_g = self.sig(self.weight_xr[i](h_out, ei) + self.weight_hr[i](h, ei))
+                h_hat = self.tanh(self.weight_xh[i](h_out, ei) + self.weight_hh[i](r_g * h, ei))
+                h_out = z_g * h[i] + (1-z_g) * h_hat
+
+            h_out = self.drop(h_out)
+
+        return h_out
+
+    def forward(self, xs, eis, mask_fn=lambda x:x, h=None):
+        h_out = []
+
+        if type(h) == type(None):
+            h = torch.zeros(xs.size(1), self.hidden_size)
+
+        for t in range(len(eis)):
+            x = xs[t]
+            ei = mask_fn(t)
+
+            h = self.forward_once(x, ei, h)
+            h_out.append(h)
+
+        return torch.stack(h_out)
+
+class VGRNN(nn.Module):
+    def __init__(self, x_dim, h_dim, z_dim, grnn=True, pred=True):
+
+        super(VGRNN, self).__init__()
+
+        self.h_dim = h_dim
+        self.grnn = grnn
+
+        self.phi_x = nn.Sequential(
+            nn.Linear(x_dim, h_dim),
+            nn.ReLU()
+        )
+
+        self.encoder = VGAE_Prior(
+            h_dim*2,
+            embed_dim=z_dim,
+            hidden_dim=h_dim
+        )
+
+        self.phi_z = nn.Sequential(
+            nn.Linear(z_dim, h_dim),
+            nn.ReLU()
+        )
+
+        self.recurrent = GraphGRU(
+            h_dim*2, h_dim
+        )
+
+        self.prior = nn.Sequential(nn.Linear(h_dim, h_dim), nn.ReLU())
+        self.prior_mean = nn.Sequential(nn.Linear(h_dim, z_dim))
+        self.prior_std = nn.Sequential(nn.Linear(h_dim, z_dim), nn.Softplus())
+
+        self.pred = pred
+
+        self.kld = torch.zeros((1))
+
+    def forward(self, data, mask_enum, h0=None):
+        zs = []
+        h = None if h0 is None else h0
+        self.kld = torch.zeros((1))
+
+        for i in range(data.T):
+            xs = data.xs if not data.dynamic_feats else data.xs[i]
+            ei = data.ei_masked(mask_enum, i)
+
+            h,z = self.forward_once(xs, ei, h)
+            zs.append(z)
+
+        return torch.stack(zs), h
+
+    def forward_once(self, x, ei, h):
+        if type(h) == type(None):
+            h = torch.zeros((x.size(0), self.h_dim))
+
+        x = self.phi_x(x)
+        gcn_x = torch.cat([x,h], dim=1)
+
+        prior = self.prior(h)
+        prior_std = self.prior_std(prior)
+        prior_mean = self.prior_mean(prior)
+
+        z, kld = self.encoder(gcn_x, ei, pm=prior_mean, ps=prior_std)
+        self.kld += kld
+
+        h_in = torch.cat([x, self.phi_z(z)], dim=1)
+        h = self.recurrent.forward_once(h_in, ei, h)
+
+        z = prior_mean if (self.pred and not self.training) else z
+        return h, z
+
+    def decode(self, src, dst, z):
+        dot = (z[src] * z[dst]).sum(dim=1)
+        return torch.sigmoid(dot)
+
+    def calc_loss_sparse(self, ts, fs, zs):
+        t_scores, f_scores = self.score_fn(ts, fs, zs)
+
+        EPS = 1e-6
+        pos_loss = -torch.log(t_scores+EPS).mean()
+        neg_loss = -torch.log(1-f_scores+EPS).mean()
+
+        return pos_loss + neg_loss + self.kld
+
+    def calc_loss(self, ts, fs, zs):
+        return self.calc_loss_sparse(ts, fs, zs)
+
+        tot_loss = torch.zeros((1))
+        T = len(ts)
+
+        for i in range(T):
+            tot_loss += full_adj_nll(ts[i], zs[i])
+
+        return tot_loss + self.kld
+
+    def calc_scores(self, ts, fs, zs):
+        return self.score_fn(ts, fs, zs)
+
+    def score_fn(self, ts, fs, zs):
+        tscores = []
+        fscores = []
+
+        T = len(ts)
+
+        for i in range(T):
+            t_src, t_dst = ts[i]
+            f_src, f_dst = fs[i]
+            z = zs[i]
+
+            tscores.append(self.decode(t_src, t_dst, z))
+            fscores.append(self.decode(f_src, f_dst, z))
+
+        tscores = torch.cat(tscores, dim=0)
+        fscores = torch.cat(fscores, dim=0)
+
+        return tscores, fscores
+
+def full_adj_nll(ei, z):
+    A = to_dense_adj(ei, max_num_nodes=z.size(0))[0]
+    A_tilde = z@z.T
+
+    temp_size = A.size(0)
+    temp_sum = A.sum()
+    posw = float(temp_size * temp_size - temp_sum) / temp_sum
+    norm = temp_size * temp_size / float((temp_size * temp_size - temp_sum) * 2)
+    nll_loss_mat = F.binary_cross_entropy_with_logits(input=A_tilde
+                                                        , target=A
+                                                        , pos_weight=posw
+                                                        , reduction='none')
+    nll_loss = -1 * norm * torch.mean(nll_loss_mat, dim=[0,1])
+    return - nll_loss
+
+class Sparse_GRCU_H(GRCU_H):
+    def __init__(self, args):
+        super().__init__(args)
+        self.mp = MessagePassing(aggr='mean')
+    def forward(self,data,mask,xs):
+        mask_list = [torch.zeros((data.num_nodes,1)) for _ in range(data.T)]
+
+        GCN_weights = self.GCN_init_weights
+        out_seq = []
+        for t in range(data.T):
+            node_embs = xs[t]
+            Ahat = add_sl(data.ei_masked(mask, t), num_nodes=data.num_nodes)[0]
+
+            GCN_weights = self.evolve_weights(GCN_weights,node_embs,mask_list[t])
+
+            node_embs = node_embs.matmul(GCN_weights)
+            node_embs = self.activation(
+                self.mp.propagate(Ahat, size=None, x=node_embs)
+            )
+
+            out_seq.append(node_embs)
+
+        return out_seq
+
+class Sparse_GRCU_O(GRCU_O):
+    def __init__(self, args):
+        super().__init__(args)
+        self.mp = MessagePassing(aggr='mean')
+    def forward(self,data,mask,xs):
+        GCN_weights = self.GCN_init_weights
+        out_seq = []
+        for t in range(data.T):
+            node_embs = xs[t]
+            Ahat = add_sl(data.ei_masked(mask, t), num_nodes=data.num_nodes)[0]
+
+            GCN_weights = self.evolve_weights(GCN_weights)
+
+            node_embs = node_embs.matmul(GCN_weights)
+            node_embs = self.activation(
+                self.mp.propagate(Ahat, size=None, x=node_embs)
+            )
+
+            out_seq.append(node_embs)
+
+        return torch.stack(out_seq)
+
+from types import SimpleNamespace as SN
+class SparseEGCN_O(EGCN_O):
+    def __init__(self, x_dim, h_dim, z_dim, pred=False):
+        args = SN(
+            feats_per_node=x_dim,
+            layer_1_feats=h_dim,
+            layer_2_feats=z_dim
+        )
+        act = torch.nn.RReLU()
+
+        super().__init__(args, act)
+        self.pred = pred
+
+        feats = [
+            x_dim,
+            h_dim,
+            z_dim
+        ]
+
+        self.GRCU_layers = []
+        self._parameters = nn.ParameterList()
+        for i in range(1,len(feats)):
+            GRCU_args = SN(
+                in_feats=feats[i-1],
+                out_feats=feats[i],
+                activation=act
+            )
+
+            grcu_i = Sparse_GRCU_O(GRCU_args)
+            self.GRCU_layers.append(grcu_i.to(self.device))
+            self._parameters.extend(list(self.GRCU_layers[-1].parameters()))
+
+    def forward(self, data, mask):
+        xs = [data.xs] * data.T
+        for unit in self.GRCU_layers:
+            xs = unit(data, mask, xs)
+        return xs
+
+    def decode(self, src, dst, z):
+        dot = (z[src] * z[dst]).sum(dim=1)
+        return torch.sigmoid(dot)
+
+    def calc_loss(self, ts, fs, zs):
+        t_scores, f_scores = self.score_fn(ts, fs, zs)
+
+        EPS = 1e-6
+        pos_loss = -torch.log(t_scores+EPS).mean()
+        neg_loss = -torch.log(1-f_scores+EPS).mean()
+
+        return pos_loss + neg_loss
+
+    def calc_scores(self, ts, fs, zs):
+        return self.score_fn(ts, fs, zs)
+
+    def score_fn(self, ts, fs, zs):
+        tscores = []
+        fscores = []
+
+        T = len(ts)
+
+        for i in range(T):
+            t_src, t_dst = ts[i]
+            f_src, f_dst = fs[i]
+            z = zs[i]
+
+            tscores.append(self.decode(t_src, t_dst, z))
+            fscores.append(self.decode(f_src, f_dst, z))
+
+        tscores = torch.cat(tscores, dim=0)
+        fscores = torch.cat(fscores, dim=0)
+
+        return tscores, fscores
+
+class SparseEGCN_H(EGCN_H):
+    def __init__(self, x_dim, h_dim, z_dim, pred=False):
+        args = SN(
+            feats_per_node=x_dim,
+            layer_1_feats=h_dim,
+            layer_2_feats=z_dim
+        )
+        act = torch.nn.RReLU()
+
+        super().__init__(args, act)
+        self.pred = pred
+
+        feats = [
+            x_dim,
+            h_dim,
+            z_dim
+        ]
+
+        self.GRCU_layers = []
+        self._parameters = nn.ParameterList()
+        for i in range(1,len(feats)):
+            GRCU_args = SN(
+                in_feats=feats[i-1],
+                out_feats=feats[i],
+                activation=act
+            )
+
+            grcu_i = Sparse_GRCU_H(GRCU_args)
+            self.GRCU_layers.append(grcu_i.to(self.device))
+            self._parameters.extend(list(self.GRCU_layers[-1].parameters()))
+
+    def forward(self, data, mask):
+        xs = [data.xs] * data.T
+        for unit in self.GRCU_layers:
+            xs = unit(data, mask, xs)
+        return xs
+
+    def decode(self, src, dst, z):
+        dot = (z[src] * z[dst]).sum(dim=1)
+        return torch.sigmoid(dot)
+
+    def calc_loss(self, ts, fs, zs):
+        t_scores, f_scores = self.score_fn(ts, fs, zs)
+
+        EPS = 1e-6
+        pos_loss = -torch.log(t_scores+EPS).mean()
+        neg_loss = -torch.log(1-f_scores+EPS).mean()
+
+        return pos_loss + neg_loss
+
+    def calc_scores(self, ts, fs, zs):
+        return self.score_fn(ts, fs, zs)
+
+    def score_fn(self, ts, fs, zs):
+        tscores = []
+        fscores = []
+
+        T = len(ts)
+
+        for i in range(T):
+            t_src, t_dst = ts[i]
+            f_src, f_dst = fs[i]
+            z = zs[i]
+
+            tscores.append(self.decode(t_src, t_dst, z))
+            fscores.append(self.decode(f_src, f_dst, z))
+
+        tscores = torch.cat(tscores, dim=0)
+        fscores = torch.cat(fscores, dim=0)
+
+        return tscores, fscores

@@ -1,0 +1,29 @@
+schema_version: 1
+kind: eg7_job
+name: gids-lite 0501
+experiment_id: gids_lite_0501
+dataset: '0501'
+window_seconds: 300
+featurization: one_hot_structural
+graph_encoder: none
+temporal_encoder: none
+loss: reconstruction
+val_fraction: 0.33
+neg_ratio: 20
+preprocess_seed: 1337
+one_hot_dim: 64
+projection_dim: 16
+mcc_grid_size: 201
+code_version: eg7_reference_v1
+workspace_root: ${work_root}/gids-lite/0501/eg7
+metadata_root: ${work_root}/gids-lite/0501/eg7/metadata
+output_root: ${work_root}/gids-lite/0501/eg7/output
+result_root: ${work_root}/gids-lite/0501/eg7/output/results
+paths:
+  repo_root: ${repo_root}
+  data_root: ${work_root}/gids-lite
+  cache_root: ${work_root}/eg7/cache
+  workspace_root: ${work_root}/gids-lite/0501/eg7
+  metadata_root: ${work_root}/gids-lite/0501/eg7/metadata
+  output_root: ${work_root}/gids-lite/0501/eg7/output
+  result_root: ${work_root}/gids-lite/0501/eg7/output/results

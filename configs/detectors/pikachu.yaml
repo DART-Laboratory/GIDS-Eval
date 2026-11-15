@@ -1,0 +1,171 @@
+schema_version: 1
+name: PIKACHU baseline
+detector: pikachu
+run_label: baseline
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/0501_oilrig.yaml
+  - ../data/0501_sandworm.yaml
+  - ../data/0501_wizard_spider.yaml
+  - ../data/cic.yaml
+  - ../data/lanl.yaml
+  - ../data/optc.yaml
+preprocess:
+  enabled: true
+  workdir: ${runtime_root}/pre_processing/pikachu
+  command:
+    - bash
+    - ${runtime_root}/pre_processing/pikachu/process_pikachu.sh
+jobs:
+  - id: oilrig
+    dataset: oilrig
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - oilrig
+      - --input
+      - ${input_root}/pikachu/0501/oilrig_300.csv
+      - --trainwin
+      - "242"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/oilrig
+      - --metrics_csv
+      - ${output_root}/pikachu/results/oilrig/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/oilrig/metrics.csv
+  - id: sandworm
+    dataset: sandworm
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - sandworm
+      - --input
+      - ${input_root}/pikachu/0501/sandworm_300.csv
+      - --trainwin
+      - "242"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/sandworm
+      - --metrics_csv
+      - ${output_root}/pikachu/results/sandworm/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/sandworm/metrics.csv
+  - id: wizard_spider
+    dataset: wizard_spider
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - wizard_spider
+      - --input
+      - ${input_root}/pikachu/0501/wizard_spider_300.csv
+      - --trainwin
+      - "243"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/wizard_spider
+      - --metrics_csv
+      - ${output_root}/pikachu/results/wizard_spider/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/wizard_spider/metrics.csv
+  - id: cic
+    dataset: cic
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - cic
+      - --input
+      - ${input_root}/pikachu/cic/cic_20.csv
+      - --trainwin
+      - "11"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/cic
+      - --metrics_csv
+      - ${output_root}/pikachu/results/cic/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/cic/metrics.csv
+  - id: lanl
+    dataset: lanl
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - lanl
+      - --input
+      - ${input_root}/pikachu/lanl/all_20.csv
+      - --trainwin
+      - "42"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/lanl
+      - --metrics_csv
+      - ${output_root}/pikachu/results/lanl/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/lanl/metrics.csv
+  - id: optc
+    dataset: optc
+    workdir: ${runtime_root}/detection_baselines/pikachu
+    command:
+      - ${python_bin}
+      - main.py
+      - --dataset
+      - optc
+      - --input
+      - ${input_root}/pikachu/optc/optc.csv
+      - --trainwin
+      - "150"
+      - --dimensions
+      - "100"
+      - --alpha
+      - "0.01"
+      - --support
+      - "10"
+      - --output
+      - ${output_root}/pikachu/results/optc
+      - --metrics_csv
+      - ${output_root}/pikachu/results/optc/metrics.csv
+      - --gpu
+      - "-1"
+    metrics_path: ${output_root}/pikachu/results/optc/metrics.csv

@@ -1,0 +1,75 @@
+schema_version: 1
+name: Anomal-E baseline
+detector: anomal
+run_label: baseline
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/0501_oilrig.yaml
+  - ../data/0501_sandworm.yaml
+  - ../data/0501_wizard_spider.yaml
+  - ../data/cic.yaml
+preprocess:
+  enabled: true
+  workdir: ${runtime_root}/pre_processing/anomal
+  command:
+    - bash
+    - ${runtime_root}/pre_processing/anomal/process_anomal.sh
+jobs:
+  - id: cic
+    dataset: cic
+    workdir: ${runtime_root}/detection_baselines/anomal/CIC
+    command:
+      - ${python_bin}
+      - run.py
+      - --dataset
+      - cic
+    env:
+      ANOMAL_DATA_ROOT: ${input_root}/anomal
+      ANOMAL_RESULTS_ROOT: ${output_root}/anomal/results
+      ANOMAL_MODELS_ROOT: ${output_root}/anomal/models
+      ANOMAL_RUN_NAME: CIC
+    metrics_path: ${output_root}/anomal/results/CIC/metrics.csv
+  - id: oilrig
+    dataset: oilrig
+    workdir: ${runtime_root}/detection_baselines/anomal/0501
+    command:
+      - ${python_bin}
+      - run.py
+      - --dataset
+      - oilrig
+    env:
+      ANOMAL_DATA_ROOT: ${input_root}/anomal
+      ANOMAL_RESULTS_ROOT: ${output_root}/anomal/results
+      ANOMAL_MODELS_ROOT: ${output_root}/anomal/models
+      ANOMAL_RUN_NAME: oilrig
+    metrics_path: ${output_root}/anomal/results/oilrig/metrics.csv
+  - id: sandworm
+    dataset: sandworm
+    workdir: ${runtime_root}/detection_baselines/anomal/0501
+    command:
+      - ${python_bin}
+      - run.py
+      - --dataset
+      - sandworm
+    env:
+      ANOMAL_DATA_ROOT: ${input_root}/anomal
+      ANOMAL_RESULTS_ROOT: ${output_root}/anomal/results
+      ANOMAL_MODELS_ROOT: ${output_root}/anomal/models
+      ANOMAL_RUN_NAME: sandworm
+    metrics_path: ${output_root}/anomal/results/sandworm/metrics.csv
+  - id: wizard
+    dataset: wizard
+    workdir: ${runtime_root}/detection_baselines/anomal/0501
+    command:
+      - ${python_bin}
+      - run.py
+      - --dataset
+      - wizard
+    env:
+      ANOMAL_DATA_ROOT: ${input_root}/anomal
+      ANOMAL_RESULTS_ROOT: ${output_root}/anomal/results
+      ANOMAL_MODELS_ROOT: ${output_root}/anomal/models
+      ANOMAL_RUN_NAME: wizard
+    metrics_path: ${output_root}/anomal/results/wizard/metrics.csv

@@ -1,0 +1,10 @@
+schema_version: 1
+dataset_id: cic
+family: cic
+display_name: CIC-new
+stage_root: ${stage_root}
+artifacts:
+  - name: cic_dir
+    kind: directory
+    source: ${raw_data_root}/CIC-new
+    target: raw_data/CIC-new

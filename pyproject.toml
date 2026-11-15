@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gids-eval"
+version = "0.1.0"
+description = "Reproducible local orchestration layer for vendored GIDS baseline detectors"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+gids-eval = "gids_eval.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

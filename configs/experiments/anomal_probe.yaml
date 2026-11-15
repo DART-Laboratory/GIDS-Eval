@@ -1,0 +1,57 @@
+schema_version: 2
+kind: experiment
+name: Anomal-E CIC probe
+experiment_id: anomal_probe
+run_label: cic_v1
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/cic.yaml
+modules:
+  graph_construction:
+    runner: noop
+    inputs:
+      data_root/raw_data: ${input_root}/raw_data
+    artifacts:
+      data_root: data_root
+  featurization:
+    runner: shell_command
+    inputs:
+      data_root/raw_data: ${graph_construction_artifact_data_root}/raw_data
+    workdir: ${runtime_root}/pre_processing/anomal
+    env:
+      MIRAGE_INPUT_ROOT: ${module_output_dir}/data_root
+    command:
+      - ${python_bin}
+      - process_CIC_anomal.py
+      - -i
+      - ${module_output_dir}/data_root/raw_data/CIC-new
+      - -o
+      - ${module_output_dir}/data_root/anomal/cic/
+    artifacts:
+      data_root: data_root
+  graph_encoder:
+    runner: noop
+    inputs:
+      data_root: ${featurization_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  temporal_encoder:
+    runner: noop
+    inputs:
+      data_root: ${graph_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  loss:
+    runner: noop
+    inputs:
+      data_root: ${temporal_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  detection:
+    runner: noop
+    inputs:
+      data_root: ${loss_artifact_data_root}
+    artifacts:
+      data_root: data_root

@@ -1,0 +1,213 @@
+schema_version: 2
+kind: experiment
+name: VGRNN modular pipeline
+experiment_id: vgrnn_modular
+run_label: baseline
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/0501_oilrig.yaml
+  - ../data/0501_sandworm.yaml
+  - ../data/0501_wizard_spider.yaml
+  - ../data/cic.yaml
+  - ../data/lanl.yaml
+  - ../data/optc.yaml
+modules:
+  graph_construction:
+    runner: noop
+    inputs:
+      data_root/raw_data: ${input_root}/raw_data
+    artifacts:
+      data_root: data_root
+  featurization:
+    runner: shell_command
+    inputs:
+      data_root/raw_data: ${graph_construction_artifact_data_root}/raw_data
+    workdir: ${runtime_root}/pre_processing/VGRNN
+    env:
+      MIRAGE_INPUT_ROOT: ${module_output_dir}/data_root
+    command:
+      - bash
+      - ${runtime_root}/pre_processing/VGRNN/process_vgrnn.sh
+    artifacts:
+      data_root: data_root
+  graph_encoder:
+    runner: noop
+    inputs:
+      data_root: ${featurization_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  temporal_encoder:
+    runner: noop
+    inputs:
+      data_root: ${graph_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  loss:
+    runner: noop
+    inputs:
+      data_root: ${temporal_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  detection:
+    runner: command_group
+    inputs:
+      data_root: ${loss_artifact_data_root}
+    artifacts:
+      data_root: data_root
+      results_root: results
+      models_root: models
+    jobs:
+      - id: lanl
+        dataset: lanl
+        workdir: ${runtime_root}/detection_baselines/vgrnn/LANL_OpTC
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - LANL
+          - --snapshot
+          - "1.5"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.01"
+          - --patience
+          - "10"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: LANL
+        metrics_relpath: results/LANL/metrics.csv
+      - id: optc
+        dataset: optc
+        workdir: ${runtime_root}/detection_baselines/vgrnn/LANL_OpTC
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - OPTC
+          - --snapshot
+          - "0.5"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.005"
+          - --patience
+          - "10"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: OPTC
+        metrics_relpath: results/OPTC/metrics.csv
+      - id: cic
+        dataset: cic
+        workdir: ${runtime_root}/detection_baselines/vgrnn/CIC
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - CIC
+          - --snapshot
+          - "10"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.01"
+          - --patience
+          - "10"
+          - --fw
+          - "0.43"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: CIC
+        metrics_relpath: results/CIC/metrics.csv
+      - id: oilrig
+        dataset: oilrig
+        workdir: ${runtime_root}/detection_baselines/vgrnn/0501
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - oilrig
+          - --snapshot
+          - "2.5"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.01"
+          - --patience
+          - "10"
+          - --fw
+          - "0.43"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: oilrig
+        metrics_relpath: results/oilrig/metrics.csv
+      - id: sandworm
+        dataset: sandworm
+        workdir: ${runtime_root}/detection_baselines/vgrnn/0501
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - sandworm
+          - --snapshot
+          - "2.5"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.001"
+          - --patience
+          - "10"
+          - --fw
+          - "0.48"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: sandworm
+        metrics_relpath: results/sandworm/metrics.csv
+      - id: wizard
+        dataset: wizard
+        workdir: ${runtime_root}/detection_baselines/vgrnn/0501
+        command:
+          - ${python_bin}
+          - run.py
+          - --dataset
+          - wizard
+          - --snapshot
+          - "2.5"
+          - --dimension
+          - "32"
+          - --lr
+          - "0.005"
+          - --patience
+          - "10"
+          - --fw
+          - "0.43"
+          - --tests
+          - "1"
+        env:
+          VGRNN_DATA_ROOT: ${module_output_dir}/data_root/vgrnn
+          VGRNN_RESULTS_ROOT: ${module_output_dir}/results
+          VGRNN_MODELS_ROOT: ${module_output_dir}/models
+          VGRNN_RUN_NAME: wizard
+        metrics_relpath: results/wizard/metrics.csv

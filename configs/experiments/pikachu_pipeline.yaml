@@ -1,0 +1,210 @@
+schema_version: 2
+kind: experiment
+name: PIKACHU modular pipeline
+experiment_id: pikachu_modular
+run_label: baseline
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+manifests:
+  - ../data/0501_oilrig.yaml
+  - ../data/0501_sandworm.yaml
+  - ../data/0501_wizard_spider.yaml
+  - ../data/cic.yaml
+  - ../data/lanl.yaml
+  - ../data/optc.yaml
+modules:
+  graph_construction:
+    runner: noop
+    inputs:
+      data_root/raw_data: ${input_root}/raw_data
+    artifacts:
+      data_root: data_root
+  featurization:
+    runner: shell_command
+    inputs:
+      data_root/raw_data: ${graph_construction_artifact_data_root}/raw_data
+    workdir: ${runtime_root}/pre_processing/pikachu
+    env:
+      MIRAGE_INPUT_ROOT: ${module_output_dir}/data_root
+    command:
+      - bash
+      - ${runtime_root}/pre_processing/pikachu/process_pikachu.sh
+    artifacts:
+      data_root: data_root
+  graph_encoder:
+    runner: noop
+    inputs:
+      data_root: ${featurization_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  temporal_encoder:
+    runner: noop
+    inputs:
+      data_root: ${graph_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  loss:
+    runner: noop
+    inputs:
+      data_root: ${temporal_encoder_artifact_data_root}
+    artifacts:
+      data_root: data_root
+  detection:
+    runner: command_group
+    inputs:
+      data_root: ${loss_artifact_data_root}
+    artifacts:
+      data_root: data_root
+      results_root: results
+    jobs:
+      - id: oilrig
+        dataset: oilrig
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - oilrig
+          - --input
+          - ${module_output_dir}/data_root/pikachu/0501/oilrig_300.csv
+          - --trainwin
+          - "242"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/oilrig
+          - --metrics_csv
+          - ${module_output_dir}/results/oilrig/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/oilrig/metrics.csv
+      - id: sandworm
+        dataset: sandworm
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - sandworm
+          - --input
+          - ${module_output_dir}/data_root/pikachu/0501/sandworm_300.csv
+          - --trainwin
+          - "242"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/sandworm
+          - --metrics_csv
+          - ${module_output_dir}/results/sandworm/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/sandworm/metrics.csv
+      - id: wizard_spider
+        dataset: wizard_spider
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - wizard_spider
+          - --input
+          - ${module_output_dir}/data_root/pikachu/0501/wizard_spider_300.csv
+          - --trainwin
+          - "243"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/wizard_spider
+          - --metrics_csv
+          - ${module_output_dir}/results/wizard_spider/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/wizard_spider/metrics.csv
+      - id: cic
+        dataset: cic
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - cic
+          - --input
+          - ${module_output_dir}/data_root/pikachu/cic/cic_20.csv
+          - --trainwin
+          - "11"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/cic
+          - --metrics_csv
+          - ${module_output_dir}/results/cic/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/cic/metrics.csv
+      - id: lanl
+        dataset: lanl
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - lanl
+          - --input
+          - ${module_output_dir}/data_root/pikachu/lanl/all_20.csv
+          - --trainwin
+          - "42"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/lanl
+          - --metrics_csv
+          - ${module_output_dir}/results/lanl/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/lanl/metrics.csv
+      - id: optc
+        dataset: optc
+        workdir: ${runtime_root}/detection_baselines/pikachu
+        command:
+          - ${python_bin}
+          - main.py
+          - --dataset
+          - optc
+          - --input
+          - ${module_output_dir}/data_root/pikachu/optc/optc.csv
+          - --trainwin
+          - "150"
+          - --dimensions
+          - "100"
+          - --alpha
+          - "0.01"
+          - --support
+          - "10"
+          - --output
+          - ${module_output_dir}/results/optc
+          - --metrics_csv
+          - ${module_output_dir}/results/optc/metrics.csv
+          - --gpu
+          - "-1"
+        metrics_relpath: results/optc/metrics.csv

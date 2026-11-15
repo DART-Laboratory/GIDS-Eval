@@ -1,0 +1,69 @@
+schema_version: 1
+name: gids-lite
+detector: gids-lite
+run_label: baseline
+seed: 1337
+python_bin: python3
+stage_mode: symlink
+design:
+  description: >
+    Encoder-free gids-lite control. One configuration is used on every
+    dataset: a 64-dimensional identity embedding concatenated with structural
+    statistics, scored by a reconstruction head, with no graph encoder and no
+    temporal encoder. The control deliberately makes no per-dataset choice.
+  graph_encoder: none
+  temporal_encoder: none
+  featurization: one_hot_structural
+  loss: reconstruction
+  selection_rule: >
+    Select once, not per dataset: among the encoder-free candidates, take the
+    one with the highest AP averaged over the per-dataset validation splits,
+    then apply it unchanged everywhere.
+  evidence:
+    source: EG7/results/2026-03-31-final/raw_results.csv
+    note: >
+      expected_ap below are the grid rows for this exact configuration.
+manifests:
+  - ../configs/data/0501_oilrig.yaml
+  - ../configs/data/0501_sandworm.yaml
+  - ../configs/data/0501_wizard_spider.yaml
+  - ../configs/data/cic.yaml
+  - ../configs/data/lanl.yaml
+  - ../configs/data/optc.yaml
+jobs:
+  - id: "0501"
+    dataset: "0501"
+    window_seconds: 300
+    featurization: one_hot_structural
+    graph_encoder: none
+    temporal_encoder: none
+    loss: reconstruction
+    expected_ap: 0.3222
+    expected_wall_sec: 5.9
+  - id: cic
+    dataset: cic
+    window_seconds: 3600
+    featurization: one_hot_structural
+    graph_encoder: none
+    temporal_encoder: none
+    loss: reconstruction
+    expected_ap: 0.9883
+    expected_wall_sec: 107.2
+  - id: lanl
+    dataset: lanl
+    window_seconds: 3600
+    featurization: one_hot_structural
+    graph_encoder: none
+    temporal_encoder: none
+    loss: reconstruction
+    expected_ap: 0.5099
+    expected_wall_sec: 3.8
+  - id: optc
+    dataset: optc
+    window_seconds: 3600
+    featurization: one_hot_structural
+    graph_encoder: none
+    temporal_encoder: none
+    loss: reconstruction
+    expected_ap: 0.9999
+    expected_wall_sec: 9.8
